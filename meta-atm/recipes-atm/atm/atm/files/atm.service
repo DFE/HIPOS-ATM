@@ -1,9 +1,0 @@
-[Unit]
-Description=Atm
-
-[Service]
-ExecStart=/etc/atm/start.sh
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
