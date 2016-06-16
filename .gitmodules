@@ -1,0 +1,3 @@
+[submodule "HIPOS"]
+	path = HIPOS
+	url = https://github.com/DFE/HIPOS.git
