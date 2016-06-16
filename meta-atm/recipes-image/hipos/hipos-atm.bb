@@ -27,4 +27,5 @@ IMAGE_INSTALL += " \
   gst-plugins-good-rtsp \
   v4l-utils \
   live555 \
+  qtimageformats-plugins \
 "
