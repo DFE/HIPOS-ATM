@@ -5,7 +5,7 @@ require recipes-images/angstrom/systemd-image.bb
 IMAGE_FEATURES += " package-management "
 
 # remove connman
-IMAGE_INSTALL_remove = "connman connman-angstrom-settings connman-plugin-loopback connman-plugin-ethernet connman-plugin-wifi"
+IMAGE_INSTALL_remove = "connman connman-angstrom-settings connman-plugin-loopback connman-plugin-ethernet connman-plugin-wifi connman-tools connman-client"
 
 IMAGE_INSTALL += "          \
   kernel-modules            \
