@@ -644,7 +644,7 @@ int main(int argc, char** argv) {
 
         }
 
-        rCam[i] = remote_vin_start(atoi(argv[ i + 2 ]), x, y+96, w, h);
+        rCam[i] = remote_vin_start(atoi(argv[ i + 2 ]), x, y, w, h);
     }
 
     while (start) {
