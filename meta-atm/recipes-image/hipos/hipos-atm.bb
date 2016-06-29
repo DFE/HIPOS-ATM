@@ -28,4 +28,6 @@ IMAGE_INSTALL += " \
   v4l-utils \
   live555 \
   qtimageformats-plugins \
+  hydraudp \
+  packagegroup-fonts-truetype \
 "
