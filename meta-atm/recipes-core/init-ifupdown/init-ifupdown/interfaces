@@ -1,0 +1,22 @@
+# The loopback interface
+auto lo
+iface lo inet loopback
+
+# Wired or wireless interfaces
+auto eth0
+iface eth0 inet static
+	netmask 255.255.255.0
+	address 192.168.1.2
+
+# external USB network adapter
+iface eth1 inet dhcp
+	pre-down ifdown eth1:avahi || true
+	post-up ifup eth1:avahi || true
+
+# run apipa on a second instance of the interface eth1
+iface eth1:avahi inet manual
+	down [ -x /usr/sbin/avahi-autoipd ] && ( /usr/sbin/avahi-autoipd -c eth1 && ( /usr/sbin/avahi-autoipd -k eth1 ) ) || true
+	up [ -x /usr/sbin/avahi-autoipd ] && ( /usr/sbin/avahi-autoipd -c eth1 || ( /usr/sbin/avahi-autoipd --wait --force-bind -D eth1 ) ) || true
+
+# these interfaces may appear/disappear during runtime
+allow-hotplug eth1
