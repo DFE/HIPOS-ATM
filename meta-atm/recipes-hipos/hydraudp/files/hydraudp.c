@@ -431,20 +431,28 @@ static enum drtp_status rtp_frame_cb(struct drtp_stream_handle_t* sh, uint32_t f
     if (header->rtp.bits.bit.type != RTP_TYPE_JPEG) {
         printf("%s: only jpeg supported: %d\n", __func__, header->rtp.bits.bit.type);
     } else if (
-            !remote->header_offset || (header->sub.jpeg.bit.type != remote->type) || (header->sub.jpeg.bit.width != remote->width) ||
+            //!remote->header_offset || (header->sub.jpeg.bit.type != remote->type) || (header->sub.jpeg.bit.width != remote->width) ||
+            (header->sub.jpeg.bit.type != remote->type) || (header->sub.jpeg.bit.width != remote->width) ||
             (header->sub.jpeg.bit.height != remote->height) || (header->sub.jpeg.bit.q != remote->q)
             ) {
         /* The received stream does not include a jpeg header, we have to reconstruct it as proposed in the rtp rfc. It's unchanged, so we reuse it
          * and put it on start of out buffer. To simplify the procedure, we do not display the first frame.
          */
-        u_char lqt[64], cqt[64];
-        MakeTables(header->sub.jpeg.bit.q, lqt, cqt);
-        remote->header_offset = MakeHeaders(remote->framebuf, header->sub.jpeg.bit.type, header->sub.jpeg.bit.width, header->sub.jpeg.bit.height, lqt, cqt, 0);
+        //u_char lqt[64], cqt[64];
+        //MakeTables(header->sub.jpeg.bit.q, lqt, cqt);
+        //remote->header_offset = MakeHeaders(remote->framebuf, header->sub.jpeg.bit.type, header->sub.jpeg.bit.width, header->sub.jpeg.bit.height, lqt, cqt, 0);
         remote->type = header->sub.jpeg.bit.type;
         remote->width = header->sub.jpeg.bit.width;
         remote->height = header->sub.jpeg.bit.height;
         remote->q = header->sub.jpeg.bit.q;
-        printf("%s generate header with q:%u type:%u w:%u h:%u header:%u\n", __func__, header->sub.jpeg.bit.q, header->sub.jpeg.bit.type, header->sub.jpeg.bit.width, header->sub.jpeg.bit.height, remote->header_offset);
+        //printf("%s generate header with q:%u type:%u w:%u h:%u header:%u\n", __func__, header->sub.jpeg.bit.q, header->sub.jpeg.bit.type, header->sub.jpeg.bit.width, header->sub.jpeg.bit.height, remote->header_offset);
+	if ((((uint8_t*)data)[0] != 0xFF) && (((uint8_t*)data)[1] != 0xD8))
+		{
+			u_char lqt[64], cqt[64];
+			MakeTables(header->sub.jpeg.bit.q, lqt, cqt);
+			remote->header_offset = MakeHeaders(remote->framebuf, header->sub.jpeg.bit.type, header->sub.jpeg.bit.width, header->sub.jpeg.bit.height, lqt, cqt, 0);
+			printf("%s generate header with q:%u type:%u w:%u h:%u header:%u\n", __func__, header->sub.jpeg.bit.q, header->sub.jpeg.bit.type, header->sub.jpeg.bit.width, header->sub.jpeg.bit.height, remote->header_offset);
+		}
     } else {
         if (1
 #ifndef FORWARD_INCLOMPLETE_FRAMES
@@ -497,8 +505,8 @@ static struct remote_struct* remote_vin_start(unsigned vin, unsigned x, unsigned
     CHECK_PTR(remote->vpudec = gst_element_factory_make("imxvpudec", NULL));
     CHECK_TRUE(gst_bin_add(GST_BIN(remote->pipeline), remote->vpudec));
 
-    //CHECK_PTR(remote->display = gst_element_factory_make("imxg2dvideosink", NULL));
-    CHECK_PTR(remote->display = gst_element_factory_make("imxipuvideosink", NULL));
+    CHECK_PTR(remote->display = gst_element_factory_make("imxg2dvideosink", NULL));
+    //CHECK_PTR(remote->display = gst_element_factory_make("imxipuvideosink", NULL));
     CHECK_TRUE(gst_bin_add(GST_BIN(remote->pipeline), remote->display));
     g_object_set(remote->display, "framebuffer", FRAMEBUFFER, "force-aspect-ratio", FALSE, "window-x-coord", x, "window-y-coord", y, "window-width", width, "window-height", height, NULL);
     GstPad* pad;
@@ -512,41 +520,8 @@ static struct remote_struct* remote_vin_start(unsigned vin, unsigned x, unsigned
 
     printf("starting %s vin/%u on display [%u,%u] width %u height %u\n", REMOTE_IP, vin, x, y, width, height);
     remote->frame_ts = time(0);
-    CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, width, height));
-    /*
-    struct remote_struct *remote = g_new0(struct remote_struct, 1);
-    CHECK_PTR(remote->pipeline = gst_pipeline_new("pipeline"));
-    CHECK_PTR(remote->appsrc = gst_element_factory_make ("appsrc", "source"));
-    CHECK_PTR(remote->vpudec = gst_element_factory_make ("videoconvert", "conv"));
-    CHECK_PTR(remote->display = gst_element_factory_make ("xvimagesink", "videosink"));
+    CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, 720, 288));
     
-    g_object_set (G_OBJECT (remote->appsrc), "caps",
-                gst_caps_new_simple ("video/x-raw",
-                                     "format", G_TYPE_STRING, "RGB16",
-                                     "width", G_TYPE_INT, 384,
-                                     "height", G_TYPE_INT, 288,
-                                     "framerate", GST_TYPE_FRACTION, 0, 1,
-                                     NULL), NULL);
-    
-    //GstCaps *caps = gst_caps_new_empty_simple("image/jpeg");
-    //g_object_set(remote->appsrc, "caps", caps, NULL);
-    //gst_caps_unref(caps);
-    
-    gst_bin_add_many (GST_BIN (remote->pipeline), remote->appsrc, remote->vpudec, remote->display, NULL);
-    
-    GstPad* pad;
-    CHECK_PTR(pad = gst_element_get_static_pad(remote->display, "sink"));
-    gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER, display_progress_cb, remote, NULL);
-    gst_object_unref(pad);
-    pad = 0;
-
-    CHECK_TRUE(gst_element_link_many(remote->appsrc, remote->vpudec, remote->display, NULL));
-    CHECK_TRUE(GST_STATE_CHANGE_FAILURE != gst_element_set_state(remote->pipeline, GST_STATE_PLAYING));
-
-    printf("starting %s vin/%u on display [%u,%u] width %u height %u\n", REMOTE_IP, vin, x, y, width, height);
-    remote->frame_ts = time(0);
-    CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, width, height));
-    */
     return remote;
 }
 
