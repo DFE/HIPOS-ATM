@@ -11,6 +11,7 @@ IMAGE_INSTALL += " \
         qtbase-fonts \
         qtbase-plugins \
         qtbase-tools \
+	qttools \
         icu \
   gstreamer \
   gst-plugins-base-app \
