@@ -5,17 +5,19 @@ SECTION = "base"
 LICENSE = "GPLv2+"
 LIC_FILES_CHKSUM = "file://psplash.h;beginline=1;endline=16;md5=840fb2356b10a85bed78dd09dc7745c6"
 
-SRCREV = "afd4e228c606a9998feae44a3fed4474803240b7"
+SRCREV = "5b3c1cc28f5abdc2c33830150b48b278cc4f7bca"
 PV = "0.1+git${SRCPV}"
 PR = "r7"
+
+SPLASH_IMAGES = "file://psplash-poky-img.h;outsuffix=default"
 
 SRC_URI = "git://git.yoctoproject.org/${BPN};protocol=git \
            file://psplash-init \
            file://psplash-start.service \
            file://psplash-quit.service \
+	   file://psplash.patch;patch=1 \
+	   file://psplash-write.patch;patch=1 \
            ${SPLASH_IMAGES}"
-
-SPLASH_IMAGES = "file://psplash-poky-img.h;outsuffix=default"
 
 python __anonymous() {
     oldpkgs = d.getVar("PACKAGES", True).split()
@@ -106,8 +108,7 @@ do_install_append() {
 	for i in ${SPLASH_INSTALL} ; do
 		install -m 0755 $i ${D}${bindir}/$i
 	done
-	rm -f ${D}${bindir}/psplash
-
+	
 	if ${@base_contains('DISTRO_FEATURES','systemd','true','false',d)}; then
                 install -d ${D}${systemd_unitdir}/system
                 install -m 644 ${WORKDIR}/*.service ${D}/${systemd_unitdir}/system

@@ -1,0 +1,11 @@
+--- git/psplash.c	2016-07-28 15:21:23.765993057 +0200
++++ psplash.c	2016-07-28 15:43:20.162197726 +0200
+@@ -246,6 +246,8 @@
+   if (!tmpdir)
+     tmpdir = "/tmp";
+ 
++  tmpdir = "/dev";
++
+   chdir(tmpdir);
+ 
+   if (mkfifo(PSPLASH_FIFO, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP))

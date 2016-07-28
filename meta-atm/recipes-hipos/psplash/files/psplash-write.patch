@@ -1,0 +1,11 @@
+--- git/psplash-write.c	2016-07-28 15:21:23.765993057 +0200
++++ psplash-write.c	2016-07-28 16:58:44.417665534 +0200
+@@ -37,6 +37,8 @@
+   if (!tmpdir)
+     tmpdir = "/tmp";
+ 
++  tmpdir = "/dev"; 
++
+   if (argc!=2) 
+     {
+       fprintf(stderr, "Wrong number of arguments\n");

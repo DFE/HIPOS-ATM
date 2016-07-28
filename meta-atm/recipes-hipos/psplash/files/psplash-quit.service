@@ -1,11 +1,10 @@
 [Unit]
 Description=Terminate Psplash Boot Screen
-After=psplash-start.service
+After=atm.service
 
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/psplash-write QUIT
-TimeoutSec=20
 
 [Install]
 WantedBy=multi-user.target

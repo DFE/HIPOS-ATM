@@ -31,4 +31,6 @@ IMAGE_INSTALL += " \
   qtimageformats-plugins \
   hydraudp \
   packagegroup-fonts-truetype \
+  liberation-fonts \
+  psplash \
 "
