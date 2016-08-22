@@ -1,6 +1,50 @@
---- git/psplash.c	2016-07-28 15:21:23.765993057 +0200
-+++ psplash.c	2016-07-28 15:43:20.162197726 +0200
-@@ -246,6 +246,8 @@
+--- git/psplash.c	2016-08-05 11:28:44.305275224 +0200
++++ psplash.c	2016-08-05 11:31:28.254493708 +0200
+@@ -132,7 +132,7 @@
+ void 
+ psplash_main (PSplashFB *fb, int pipe_fd, int timeout) 
+ {
+-  int            err;
++  int            err,prg = 1;
+   ssize_t        length = 0;
+   fd_set         descriptors;
+   struct timeval tv;
+@@ -149,6 +149,7 @@
+ 
+   while (1) 
+     {
++      /*
+       if (timeout != 0) 
+ 	err = select(pipe_fd+1, &descriptors, NULL, NULL, &tv);
+       else
+@@ -159,10 +160,16 @@
+ 	  /*
+ 	  if (errno == EINTR)
+ 	    continue;
+-	  */
++	  
+ 	  return;
+ 	}
+-      
++      */
++      if(prg>=100)
++          prg = 0;
++          
++      psplash_draw_progress (fb, prg);
++      prg++;
++       
+       length += read (pipe_fd, end, sizeof(command) - (end - command));
+ 
+       if (length == 0) 
+@@ -189,6 +196,7 @@
+ 
+ 
+     out:
++      usleep(24000);
+       end = &command[length];
+     
+       tv.tv_sec = timeout;
+@@ -246,6 +254,8 @@
    if (!tmpdir)
      tmpdir = "/tmp";
  

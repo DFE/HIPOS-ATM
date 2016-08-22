@@ -1,8 +1,8 @@
 LICENSE = "LGPLv2.1"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=d41d8cd98f00b204e9800998ecf8427e"
 SECTION = "multimedia"
-DEPENDS = "poppler qttools"
-SRCREV = "465"
+DEPENDS = "poppler"
+SRCREV = "529"
 SRC_URI = "svn://svn.gecoitalia.biz:18080/svn;protocol=http;module=atm"
 
 S = "${WORKDIR}/atm/"
@@ -41,6 +41,7 @@ do_install () {
   cp -f ${S}doc/* ${D}${sysconfdir}/atm/doc/
   cp -f ${S}stylesheet/* ${D}${sysconfdir}/atm/stylesheet/
   cp -f ${S}screenshot.raw ${D}${sysconfdir}/atm
+  cp -f ${S}translate* ${D}${sysconfdir}/atm
   install -m 0755 ${WORKDIR}/start.sh ${D}${sysconfdir}/atm/
 
   install -m 0644 ${WORKDIR}/atm.service ${D}${base_libdir}/systemd/system/
