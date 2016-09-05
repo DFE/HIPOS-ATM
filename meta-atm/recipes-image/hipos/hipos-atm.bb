@@ -11,6 +11,7 @@ IMAGE_INSTALL += " \
         qtbase-fonts \
         qtbase-plugins \
         qtbase-tools \
+	qttools \
         icu \
   gstreamer \
   gst-plugins-base-app \
@@ -30,4 +31,6 @@ IMAGE_INSTALL += " \
   qtimageformats-plugins \
   hydraudp \
   packagegroup-fonts-truetype \
+  liberation-fonts \
+  psplash \
 "
