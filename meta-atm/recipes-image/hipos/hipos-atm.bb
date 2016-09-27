@@ -2,6 +2,8 @@ require hipos-image.inc
 
 export IMAGE_BASENAME = "hipos-atm"
 
+IMAGE_LINGUAS = "en-us de-de it-it"
+
 IMAGE_FSTYPES = "tar.bz2"
 
 IMAGE_INSTALL += " \
