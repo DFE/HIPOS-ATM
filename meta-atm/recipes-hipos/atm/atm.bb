@@ -2,7 +2,7 @@ LICENSE = "LGPLv2.1"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=d41d8cd98f00b204e9800998ecf8427e"
 SECTION = "multimedia"
 DEPENDS = "poppler"
-SRCREV = "529"
+SRCREV = "603"
 SRC_URI = "svn://svn.gecoitalia.biz:18080/svn;protocol=http;module=atm"
 
 S = "${WORKDIR}/atm/"

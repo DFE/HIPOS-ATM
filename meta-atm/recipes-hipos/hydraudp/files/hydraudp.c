@@ -6,6 +6,8 @@
  * 
  * (C) 2016 DResearch Fahrzeugelektronik GmbH
  *
+ * RSR: comments and code modifications added at 04.01.2017 
+ *
  * $Id: bf53b0c27dea0b53306c820a719536508d8855e1 $
  *
  */
@@ -23,7 +25,6 @@
 #include <drtp.h>
 
 #define HIMX0294_ST4022           /**< himx0294 ST4022 boards with 0 vin and 1 vout connector connector */
-
 char REMOTE_IP[] = "172.29.23.18";  /**< IP address of the remote device providing streams */
 #define HEIGHT 768                /**< display target height */
 #define WIDTH  960                /**< display target width */
@@ -479,6 +480,7 @@ static GstPadProbeReturn display_progress_cb(GstPad *pad, GstPadProbeInfo *info,
     (void) info;
     struct remote_struct *remote = _remote;
     g_atomic_int_inc(&remote->frame_count);
+	/* RSR here a stamp in ms should be used to detect frozen streams in about 300ms. Attend then correct locking for access in other threads. */
     g_atomic_int_set(&remote->frame_ts, time(0));
     return GST_PAD_PROBE_OK;
 }
@@ -520,13 +522,25 @@ static struct remote_struct* remote_vin_start(unsigned vin, unsigned x, unsigned
 
     printf("starting %s vin/%u on display [%u,%u] width %u height %u\n", REMOTE_IP, vin, x, y, width, height);
     remote->frame_ts = time(0);
-    CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, 720, 288));
-    
+	if (width == WIDTH)
+	{
+		CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, 720, 288));
+		// This could work better with hipox because of available harware scaler. Himx systems use 2/4/CIF only. Then the local scaler on this device is used.
+		// Do never try to get to large resulutions, this coud overload the source device!
+		// CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, WIDTH / 2, HEIGHT / 2));
+	} else { // quad
+		CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, 320, 288));
+		// Try this, it could do the job better, I not checked that (RSR)
+		// CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, WIDTH / 2, HEIGHT / 2));
+	}
     return remote;
 }
 
 /** Somehow timer controlled check function, mainly to realize a display notification for frozen streams (not implemented here). On network problems a restart could help. */
 static void remote_vin_check(struct remote_struct* remote) {
+	// RSR this is much to slow to detect frozen streams. This code must be improved.
+	// This code also does not detect gstreamer failures (find reasons with GST_DEBUG=4 on program start), what can happen. For that cases
+	// you will need gstreamer error handler, pipline/program restarts etc. That's rather complex code, not part of the demo.
     if (g_atomic_int_get(&remote->frame_ts) + DEMO_DELAY_SEC / 2 <= time(0)) {
         printf("rtp stream failure, try to restart\n"); /* or draw the quadrant with a nice no cam picture... */
         enum drtp_status ret = drtp_stream_restart(&remote->sh); /* this call reconnects the UDP rtp stream, works well after server problems */
@@ -553,6 +567,13 @@ static void remote_vin_stop(struct remote_struct* remote) {
     g_free(remote);
 }
 
+static void remote_vin_fast_stop(struct remote_struct* remote)
+{
+	assert(remote);
+	enum drtp_status ret = drtp_stream_stop(&remote->sh); /* notify the remote side to avoid resource problems with hanging rtp streams */
+	/* Stopping the pipline is nice but need some time, so leave it alone */
+}
+
 void sighandler(int signum)
 {
    printf("Caught signal %d, coming out...\n", signum);
@@ -560,7 +581,8 @@ void sighandler(int signum)
    start = 0;
     if(signum!=SIGABRT){
         for (i = 0; i < numCam; i++) {
-            remote_vin_stop(rCam[i]);
+            //remote_vin_stop(rCam[i]); RSR: speedup the shutdown procedure
+			remote_vin_fast_stop(rCam[i]);
         }
         exit(0);
     }else{
@@ -574,8 +596,8 @@ int main(int argc, char** argv) {
     int i, w, h, x, y;
 
     //signal(SIGINT, sighandler);
-    signal(SIGKILL, sighandler);
-    signal(SIGTERM, sighandler);
+    //CHECK_TRUE(SIG_ERR != signal(SIGKILL, sighandler)); /* RSR: this can never be catched, returns an error, do never use SIGKILL here, this leaks stream resources!!! */
+    CHECK_TRUE(SIG_ERR != signal(SIGTERM, sighandler)); /* RSR: use SIGTERM not SIGINT to stop that program correctly */
     //signal(SIGCHLD, sighandler);
         
     numCam = argc - 2;

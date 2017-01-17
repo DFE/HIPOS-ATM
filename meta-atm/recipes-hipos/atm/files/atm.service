@@ -2,7 +2,7 @@
 Description=Atm
 
 [Service]
-ExecStart=/etc/atm/start.sh
+ExecStart=/usr/bin/atm
 Restart=always
 
 [Install]
