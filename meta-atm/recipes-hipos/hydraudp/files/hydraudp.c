@@ -28,7 +28,8 @@
 char REMOTE_IP[] = "172.29.23.18";  /**< IP address of the remote device providing streams */
 #define HEIGHT 768                /**< display target height */
 #define WIDTH  960                /**< display target width */
-#define DEMO_DELAY_SEC 10         /**< switch time for demo function */
+//#define DEMO_DELAY_SEC 10         /**< switch time for demo function */
+#define DEMO_DELAY_SEC 2         /**< switch time for demo function */
 
 
 /* e.g. ST4022 without multiplex circuit on vout */
@@ -398,7 +399,7 @@ struct remote_struct /* inherits struct drtp_stream_handle_t */ {
 
     gint frame_count; /**< frame counter (statistics only) */
     gint frame_ts; /**< last frame timestamp from display */
-
+    
     gboolean trace_fames; /**< trace flag */
 };
 
@@ -649,7 +650,8 @@ int main(int argc, char** argv) {
         for (i = 0; i < numCam; i++) {
             remote_vin_check(rCam[i]);
         }
-        sleep(1);
+        //sleep(1);
+        usleep(250000);
 
     }
     /*
