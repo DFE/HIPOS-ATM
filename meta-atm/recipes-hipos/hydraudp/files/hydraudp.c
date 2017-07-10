@@ -20,16 +20,17 @@
 #include <stdlib.h>
 #include <glib.h>
 #include <time.h>
+#include <sys/time.h>
 #include <gst/gst.h>
 
 #include <drtp.h>
 
 #define HIMX0294_ST4022           /**< himx0294 ST4022 boards with 0 vin and 1 vout connector connector */
-char REMOTE_IP[] = "172.29.23.18";  /**< IP address of the remote device providing streams */
+char REMOTE_IP[64] = "172.29.23.18";  /**< IP address of the remote device providing streams */
 #define HEIGHT 768                /**< display target height */
 #define WIDTH  960                /**< display target width */
-//#define DEMO_DELAY_SEC 10         /**< switch time for demo function */
-#define DEMO_DELAY_SEC 2         /**< switch time for demo function */
+#define DEMO_DELAY_SEC 10         /**< switch time for demo function */
+#define MIN_DELAY_MSEC 300        /**< stream lost detection in ms */
 
 
 /* e.g. ST4022 without multiplex circuit on vout */
@@ -41,9 +42,11 @@ char REMOTE_IP[] = "172.29.23.18";  /**< IP address of the remote device providi
 #define CHECK_PTR(P)  ((P) || (printf("line %u '%s' is NULL\n",  __LINE__, #P), abort(), 0))
 #define CHECK_TRUE(B) ((B) || (printf("line %u '%s' is FALSE\n", __LINE__, #B), abort(), FALSE))
 
-struct remote_struct *rCam[4];
-int numCam = 0;
-int start = 1;
+static struct remote_struct *rCam[4];
+static int numCam = 0;
+static int start = 1;
+static GMainLoop *s_pGMainloop;
+static int hydraVer = 1;
 
 /** Simple file write helper */
 static void write_file(const char* filename, const char* what, unsigned size) {
@@ -384,10 +387,12 @@ static int MakeHeaders(u_char *p, int type, int w, int h, u_char *lqt, u_char *c
 /** Connecton object holding all relevant information */
 struct remote_struct /* inherits struct drtp_stream_handle_t */ {
     struct drtp_stream_handle_t sh; /**< librtp stream handle, first member for cast to struct remote_struct in rtp callbacks */
+	unsigned vin; /* vin id for tracing */
 
     GstElement *pipeline; /**< pipeline container */
     GstElement *appsrc; /**< application source */
     GstElement *vpudec; /**< decoder */
+    //GstElement *gelem; /**< XXX */
     GstElement *display; /**< display sink */
 
     unsigned q; /**< rtp subheader q */
@@ -398,7 +403,11 @@ struct remote_struct /* inherits struct drtp_stream_handle_t */ {
     unsigned char framebuf[150 * 1024]; /**< rtp frame buffer memory */
 
     gint frame_count; /**< frame counter (statistics only) */
-    gint frame_ts; /**< last frame timestamp from display */
+    //gint frame_ts; /**< last frame timestamp from display */
+	struct timeval display_ts;
+	struct timeval frame_ts;
+	GMutex mutex_ts;  /**< timestamp mutex because setting is not atomic */
+	int reconnect_delay;  /** reconnect deley in sec to avoid overloading the recorder */
     
     gboolean trace_fames; /**< trace flag */
 };
@@ -427,35 +436,37 @@ static enum drtp_status rtp_frame_cb(struct drtp_stream_handle_t* sh, uint32_t f
     enum drtp_status ret = DRTP_SUCCESS;
     struct remote_struct* remote = (struct remote_struct*) sh;
 
+    //remote->trace_fames = 1;
     if (remote->trace_fames) printf("%s: %p cam:%u %ux%u flags:%02X size:%u ts:%llu\n", __func__, data, cam, width, height, flags, len, ts);
     assert(remote->framebuf + remote->header_offset == data);
     assert(sizeof (remote->framebuf) >= remote->header_offset + len);
     if (header->rtp.bits.bit.type != RTP_TYPE_JPEG) {
         printf("%s: only jpeg supported: %d\n", __func__, header->rtp.bits.bit.type);
-    } else if (
-            //!remote->header_offset || (header->sub.jpeg.bit.type != remote->type) || (header->sub.jpeg.bit.width != remote->width) ||
-            (header->sub.jpeg.bit.type != remote->type) || (header->sub.jpeg.bit.width != remote->width) ||
-            (header->sub.jpeg.bit.height != remote->height) || (header->sub.jpeg.bit.q != remote->q)
-            ) {
-        /* The received stream does not include a jpeg header, we have to reconstruct it as proposed in the rtp rfc. It's unchanged, so we reuse it
-         * and put it on start of out buffer. To simplify the procedure, we do not display the first frame.
-         */
-        //u_char lqt[64], cqt[64];
-        //MakeTables(header->sub.jpeg.bit.q, lqt, cqt);
-        //remote->header_offset = MakeHeaders(remote->framebuf, header->sub.jpeg.bit.type, header->sub.jpeg.bit.width, header->sub.jpeg.bit.height, lqt, cqt, 0);
-        remote->type = header->sub.jpeg.bit.type;
-        remote->width = header->sub.jpeg.bit.width;
-        remote->height = header->sub.jpeg.bit.height;
-        remote->q = header->sub.jpeg.bit.q;
-        //printf("%s generate header with q:%u type:%u w:%u h:%u header:%u\n", __func__, header->sub.jpeg.bit.q, header->sub.jpeg.bit.type, header->sub.jpeg.bit.width, header->sub.jpeg.bit.height, remote->header_offset);
-	if ((((uint8_t*)data)[0] != 0xFF) && (((uint8_t*)data)[1] != 0xD8))
+	} else if (
+			//!remote->header_offset || (header->sub.jpeg.bit.type != remote->type) || (header->sub.jpeg.bit.width != remote->width) ||
+			(header->sub.jpeg.bit.type != remote->type) || (header->sub.jpeg.bit.width != remote->width) ||
+			(header->sub.jpeg.bit.height != remote->height) || (header->sub.jpeg.bit.q != remote->q)
+			) {
+		/* The received stream does not include a jpeg header, we have to reconstruct it as proposed in the rtp rfc. It's unchanged, so we reuse it
+		 * and put it on start of out buffer. To simplify the procedure, we do not display the first frame.
+		 */
+		//u_char lqt[64], cqt[64];
+		//MakeTables(header->sub.jpeg.bit.q, lqt, cqt);
+		//remote->header_offset = MakeHeaders(remote->framebuf, header->sub.jpeg.bit.type, header->sub.jpeg.bit.width, header->sub.jpeg.bit.height, lqt, cqt, 0);
+		remote->type = header->sub.jpeg.bit.type;
+		remote->width = header->sub.jpeg.bit.width;
+		remote->height = header->sub.jpeg.bit.height;
+		remote->q = header->sub.jpeg.bit.q;
+		if ((((uint8_t*)data)[0] != 0xFF) && (((uint8_t*)data)[1] != 0xD8))
 		{
 			u_char lqt[64], cqt[64];
 			MakeTables(header->sub.jpeg.bit.q, lqt, cqt);
 			remote->header_offset = MakeHeaders(remote->framebuf, header->sub.jpeg.bit.type, header->sub.jpeg.bit.width, header->sub.jpeg.bit.height, lqt, cqt, 0);
 			printf("%s generate header with q:%u type:%u w:%u h:%u header:%u\n", __func__, header->sub.jpeg.bit.q, header->sub.jpeg.bit.type, header->sub.jpeg.bit.width, header->sub.jpeg.bit.height, remote->header_offset);
+		} else {
+			printf("%s header with q:%u type:%u w:%u h:%u\n", __func__, header->sub.jpeg.bit.q, header->sub.jpeg.bit.type, 8*header->sub.jpeg.bit.width, 8*header->sub.jpeg.bit.height);
 		}
-    } else {
+	} else {
         if (1
 #ifndef FORWARD_INCLOMPLETE_FRAMES
                 && !(flags & DRTP_PACKET_LOST)
@@ -468,7 +479,11 @@ static enum drtp_status rtp_frame_cb(struct drtp_stream_handle_t* sh, uint32_t f
             g_signal_emit_by_name(remote->appsrc, "push-buffer", buf, &fret);
             if (fret != GST_FLOW_OK) {
                 printf("%s: buffer not pushed", __func__);
-            }
+			} else {
+				g_mutex_lock(&remote->mutex_ts);
+				gettimeofday(&remote->frame_ts, 0);
+				g_mutex_unlock(&remote->mutex_ts);
+			}
             gst_buffer_unref(buf); /* Free the buffer now that we are done with it */
         }
     }
@@ -482,9 +497,31 @@ static GstPadProbeReturn display_progress_cb(GstPad *pad, GstPadProbeInfo *info,
     struct remote_struct *remote = _remote;
     g_atomic_int_inc(&remote->frame_count);
 	/* RSR here a stamp in ms should be used to detect frozen streams in about 300ms. Attend then correct locking for access in other threads. */
-    g_atomic_int_set(&remote->frame_ts, time(0));
+    //g_atomic_int_set(&remote->frame_ts, time(0));
+	g_mutex_lock(&remote->mutex_ts);
+	gettimeofday(&remote->display_ts, 0);
+	g_mutex_unlock(&remote->mutex_ts);
     return GST_PAD_PROBE_OK;
 }
+
+
+static void on_error(GstBus *bus, GstMessage *message, gpointer _remote)
+{
+    struct remote_struct *remote = _remote;
+	(void)bus;
+	if (GST_MESSAGE_ERROR == GST_MESSAGE_TYPE(message))
+	{
+		GError *err = NULL;
+		gchar *dbg_info = NULL;
+		gst_message_parse_error (message, &err, &dbg_info);
+		printf("gst error message: vin/%u element %s: %s (%s)\n", remote->vin, GST_OBJECT_NAME(message->src), err->message, (dbg_info ? dbg_info : ""));
+		g_error_free (err);
+		g_free (dbg_info);
+	} else {
+		printf("%s vin/%u called with type %d\n", __func__, remote->vin, GST_MESSAGE_TYPE(message));
+	}
+}
+
 
 /** Activate the given vin-connector of a remote device in display coordinates x,y with given dimension, no wait 
  *   pipeline: appsrc ! imxvpudec ! imxg2dvideosink
@@ -496,6 +533,9 @@ static GstPadProbeReturn display_progress_cb(GstPad *pad, GstPadProbeInfo *info,
 static struct remote_struct* remote_vin_start(unsigned vin, unsigned x, unsigned y, unsigned width, unsigned height) {
     
     struct remote_struct *remote = g_new0(struct remote_struct, 1);
+	GstBus *bus;
+	remote->vin = vin;
+	g_mutex_init(&remote->mutex_ts);
     CHECK_PTR(remote->pipeline = gst_pipeline_new(NULL));
 
     CHECK_PTR(remote->appsrc = gst_element_factory_make("appsrc", NULL));
@@ -511,6 +551,7 @@ static struct remote_struct* remote_vin_start(unsigned vin, unsigned x, unsigned
     CHECK_PTR(remote->display = gst_element_factory_make("imxg2dvideosink", NULL));
     //CHECK_PTR(remote->display = gst_element_factory_make("imxipuvideosink", NULL));
     CHECK_TRUE(gst_bin_add(GST_BIN(remote->pipeline), remote->display));
+	printf("%s: %ux%u %ux%u\n", __func__, x, y, width, height);
     g_object_set(remote->display, "framebuffer", FRAMEBUFFER, "force-aspect-ratio", FALSE, "window-x-coord", x, "window-y-coord", y, "window-width", width, "window-height", height, NULL);
     GstPad* pad;
     CHECK_PTR(pad = gst_element_get_static_pad(remote->display, "sink"));
@@ -518,22 +559,34 @@ static struct remote_struct* remote_vin_start(unsigned vin, unsigned x, unsigned
     gst_object_unref(pad);
     pad = 0;
 
+    //CHECK_PTR(remote->gelem = gst_element_factory_make("imxipuvideotransform", NULL));
+    //CHECK_TRUE(gst_bin_add(GST_BIN(remote->pipeline), remote->gelem));
+
     CHECK_TRUE(gst_element_link_many(remote->appsrc, remote->vpudec, remote->display, NULL));
+	bus = gst_pipeline_get_bus(GST_PIPELINE (remote->pipeline));
+	gst_bus_add_signal_watch(bus);
+	g_signal_connect (bus, "message::error", (GCallback)on_error, remote);
     CHECK_TRUE(GST_STATE_CHANGE_FAILURE != gst_element_set_state(remote->pipeline, GST_STATE_PLAYING));
 
-    printf("starting %s vin/%u on display [%u,%u] width %u height %u\n", REMOTE_IP, vin, x, y, width, height);
-    remote->frame_ts = time(0);
-	if (width == WIDTH)
+	gettimeofday(&remote->display_ts, 0);
+	remote->frame_ts = remote->display_ts;
+	//remote->frame_ts = time(0);
+        
+        if (width == WIDTH)
 	{
-		CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, 720, 288));
+                printf("starting %s vin/%u on display [%u,%u] width %u height %u (704x288)\n", REMOTE_IP, vin, x, y, width, height);
+		CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, 704, 288));
 		// This could work better with hipox because of available harware scaler. Himx systems use 2/4/CIF only. Then the local scaler on this device is used.
 		// Do never try to get to large resulutions, this coud overload the source device!
 		// CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, WIDTH / 2, HEIGHT / 2));
 	} else { // quad
-		CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, 320, 288));
+                printf("starting %s vin/%u on display [%u,%u] width %u height %u (352x288)\n", REMOTE_IP, vin, x, y, width, height);
+		CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, 704/2, 288/2));
 		// Try this, it could do the job better, I not checked that (RSR)
 		// CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, WIDTH / 2, HEIGHT / 2));
 	}
+        
+        
     return remote;
 }
 
@@ -542,15 +595,46 @@ static void remote_vin_check(struct remote_struct* remote) {
 	// RSR this is much to slow to detect frozen streams. This code must be improved.
 	// This code also does not detect gstreamer failures (find reasons with GST_DEBUG=4 on program start), what can happen. For that cases
 	// you will need gstreamer error handler, pipline/program restarts etc. That's rather complex code, not part of the demo.
-    if (g_atomic_int_get(&remote->frame_ts) + DEMO_DELAY_SEC / 2 <= time(0)) {
-        printf("rtp stream failure, try to restart\n"); /* or draw the quadrant with a nice no cam picture... */
-        enum drtp_status ret = drtp_stream_restart(&remote->sh); /* this call reconnects the UDP rtp stream, works well after server problems */
-        if (ret != DRTP_SUCCESS) {
-            printf("%s restart rtp stream failed: %s\n", __func__, drtp_strerror(ret));
-        } else {
-            g_atomic_int_set(&remote->frame_ts, time(0));
-        }
-    }
+#if 0
+	if (g_atomic_int_get(&remote->frame_ts) + DEMO_DELAY_SEC / 2 <= time(0)) {
+		printf("rtp stream failure, try to restart\n"); /* or draw the quadrant with a nice no cam picture... */
+		enum drtp_status ret = drtp_stream_restart(&remote->sh); /* this call reconnects the UDP rtp stream, works well after server problems */
+		if (ret != DRTP_SUCCESS) {
+			printf("%s restart rtp stream failed: %s\n", __func__, drtp_strerror(ret));
+		} else {
+			g_atomic_int_set(&remote->frame_ts, time(0));
+		}
+	}
+#else
+	struct timeval now;
+	gettimeofday(&now, 0);
+	g_mutex_lock(&remote->mutex_ts);
+	int display_progess_ms = (now.tv_sec - remote->display_ts.tv_sec) * 1000 + (now.tv_usec - remote->display_ts.tv_usec) / 1000;
+	int src_progess_ms = (now.tv_sec - remote->frame_ts.tv_sec) * 1000 + (now.tv_usec - remote->frame_ts.tv_usec) / 1000;
+	g_mutex_unlock(&remote->mutex_ts);
+	if (src_progess_ms > MIN_DELAY_MSEC + 1000 * remote->reconnect_delay)
+	{
+		/* RSR: I recommend an error handling id reconnect_delay >= 3..10 */
+		printf("rtp stream failure (%dms), try to restart\n", display_progess_ms); /* or draw the quadrant with a nice no cam picture... */
+		enum drtp_status ret = drtp_stream_restart(&remote->sh); /* this call reconnects the UDP rtp stream, works well after server problems */
+		if (ret != DRTP_SUCCESS) {
+			printf("%s restart rtp stream failed: %s\n", __func__, drtp_strerror(ret));
+		} else {
+			remote->reconnect_delay++;
+			g_mutex_lock(&remote->mutex_ts);
+			gettimeofday(&remote->frame_ts, 0);
+			g_mutex_unlock(&remote->mutex_ts);
+		}
+	} else {
+		if (src_progess_ms > MIN_DELAY_MSEC)
+		{
+			printf("display problems in vin/%u delay %dms\n", remote->vin, display_progess_ms); /* or draw the quadrant with a nice no cam picture... */
+		} else {
+			//printf("rtp stream check %d/%dms\n", src_progess_ms, display_progess_ms); /* or draw the quadrant with a nice no cam picture... */
+			remote->reconnect_delay = 0;
+		}
+	}
+#endif
 }
 
 /** Stop the rtp streaming and display pipeline */
@@ -558,9 +642,9 @@ static void remote_vin_stop(struct remote_struct* remote) {
     assert(remote);
     enum drtp_status ret = drtp_stream_stop(&remote->sh);
     if (DRTP_SUCCESS != ret) {
-        printf("%s stopping rtp stream failed: %s\n", __func__, drtp_strerror(ret));
+        printf("%s stopping rtp stream vin/%u failed: %s\n", __func__, remote->vin, drtp_strerror(ret));
     } else {
-        printf("%s stopped rtp stream after %u frames\n", __func__, remote->frame_count);
+        printf("%s stopped rtp stream vin/%u after %u frames\n", __func__, remote->vin, remote->frame_count);
     }
     CHECK_TRUE(GST_STATE_CHANGE_FAILURE != gst_element_set_state(remote->pipeline, GST_STATE_NULL));
     gst_object_unref(remote->pipeline);
@@ -582,15 +666,25 @@ void sighandler(int signum)
    start = 0;
     if(signum!=SIGABRT){
         for (i = 0; i < numCam; i++) {
-            //remote_vin_stop(rCam[i]); RSR: speedup the shutdown procedure
-			remote_vin_fast_stop(rCam[i]);
+            //remote_vin_stop(rCam[i]); //RSR: speedup the shutdown procedure
+            remote_vin_fast_stop(rCam[i]);
         }
-        exit(0);
+        g_main_loop_quit(s_pGMainloop);
     }else{
         exit(1);
     }
-   
 }
+
+static gboolean cam_check_timer(gpointer _numCam)
+{
+	unsigned numCam = GPOINTER_TO_UINT(_numCam);
+	int i;
+	for (i = 0; i < numCam; i++) {
+		remote_vin_check(rCam[i]);
+	}
+	return TRUE;
+}
+
 
 int main(int argc, char** argv) {
     
@@ -599,6 +693,7 @@ int main(int argc, char** argv) {
     //signal(SIGINT, sighandler);
     //CHECK_TRUE(SIG_ERR != signal(SIGKILL, sighandler)); /* RSR: this can never be catched, returns an error, do never use SIGKILL here, this leaks stream resources!!! */
     CHECK_TRUE(SIG_ERR != signal(SIGTERM, sighandler)); /* RSR: use SIGTERM not SIGINT to stop that program correctly */
+    CHECK_TRUE(SIG_ERR != signal(SIGINT, sighandler)); /* RSR: use SIGTERM not SIGINT to stop that program correctly */
     //signal(SIGCHLD, sighandler);
         
     numCam = argc - 2;
@@ -645,6 +740,12 @@ int main(int argc, char** argv) {
         rCam[i] = remote_vin_start(atoi(argv[ i + 2 ]), x, y, w, h);
     }
 
+	g_timeout_add(100, cam_check_timer, GUINT_TO_POINTER(numCam));
+	s_pGMainloop = g_main_loop_new (0, FALSE);
+	g_main_loop_run (s_pGMainloop);
+	g_main_loop_unref (s_pGMainloop);
+
+#if 0
     while (start) {
 
         for (i = 0; i < numCam; i++) {
@@ -664,6 +765,7 @@ int main(int argc, char** argv) {
     remote_vin_stop(r4);
     r4 = 0;
     */
+#endif
     return 0;
 }
 
