@@ -576,14 +576,11 @@ static struct remote_struct* remote_vin_start(unsigned vin, unsigned x, unsigned
 	{
                 printf("starting %s vin/%u on display [%u,%u] width %u height %u (704x288)\n", REMOTE_IP, vin, x, y, width, height);
 		CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, 704, 288));
-		// This could work better with hipox because of available harware scaler. Himx systems use 2/4/CIF only. Then the local scaler on this device is used.
-		// Do never try to get to large resulutions, this coud overload the source device!
-		// CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, WIDTH / 2, HEIGHT / 2));
+		
 	} else { // quad
                 printf("starting %s vin/%u on display [%u,%u] width %u height %u (352x288)\n", REMOTE_IP, vin, x, y, width, height);
 		CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, 704/2, 288/2));
-		// Try this, it could do the job better, I not checked that (RSR)
-		// CHECK_TRUE(DRTP_SUCCESS == drtp_udp_stream_start(&remote->sh, rtp_frame_cb, rtp_memory_cb, REMOTE_IP, vin, WIDTH / 2, HEIGHT / 2));
+		
 	}
         
         
