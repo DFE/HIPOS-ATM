@@ -13,7 +13,7 @@ SRC_URI = " file://fw-update.service \
           "
 
 FILES_${PN} = " ${base_libdir}/systemd \
-                ${bindir}/hip-boot \
+                ${bindir}/fw-good \
               "
 
 SYSTEMD_SERVICE_${PN} = "fw-update.service"
