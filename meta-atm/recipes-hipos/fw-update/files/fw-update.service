@@ -1,0 +1,12 @@
+[Unit]
+Description=Mark firmware as good.
+
+[Service]
+Type=oneshot
+ExecStart=@BINDIR@/fw-good
+ExecStartPost=@BASE_BINDIR@/systemctl disable fw-update.service
+StandardOutput=syslog
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
