@@ -2,7 +2,7 @@ SUMMARY = "A user tool hydra streaming udp"
 SECTION = "base"
 LICENSE = "CLOSED"
 
-PR = "r0"
+PR = "r1"
 
 S = "${WORKDIR}"
 DEPENDS = "libdrtp gstreamer glib-2.0 systemd"
