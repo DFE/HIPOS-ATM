@@ -35,4 +35,5 @@ IMAGE_INSTALL += " \
   packagegroup-fonts-truetype \
   liberation-fonts \
   psplash \
+  fw-update \
 "
