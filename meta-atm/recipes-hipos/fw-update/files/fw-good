@@ -1,0 +1,19 @@
+#!/bin/bash
+
+FW_ENV=/tmp/uboot-env.cache
+FW_OPTION=""
+
+fw_good()
+{
+    fw_printenv $FW_OPTION > ${FW_ENV}
+    local BOOT_CMD=`grep "^fw-update=" ${FW_ENV} | cut -d '=' -f 2`
+    if [ -z "${BOOT_CMD}" ]
+    then
+        echo "There is no update pending"
+        exit 0
+    fi
+    echo -e "bootcmd ${BOOT_CMD}\nfw-update" | fw_setenv $FW_OPTION -s -
+}
+
+fw_good
+

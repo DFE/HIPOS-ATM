@@ -1,0 +1,13 @@
+[Unit]
+Description=HydraIP rtp/udp video server
+Before=atm.service
+
+[Service]
+ExecStart=/usr/bin/hydraudp --server --version
+ExecStop=/usr/bin/hydraudp
+
+# I would recommend a restart limit with system fail detection to restart the system on serious hardware/software problems.
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
