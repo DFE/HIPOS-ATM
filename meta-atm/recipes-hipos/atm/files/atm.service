@@ -2,7 +2,7 @@
 Description=Atm
 
 [Service]
-ExecStart=/usr/bin/atm
+ExecStart=/usr/bin/atm --platform eglfs
 Restart=always
 
 [Install]
