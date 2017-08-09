@@ -10,6 +10,7 @@ IMAGE_INSTALL += " \
 	sqlite3 \
 	poppler \
 	atm \
+        qtbase-fonts \
         qtbase-plugins \
         qtbase-tools \
 	qttools \
