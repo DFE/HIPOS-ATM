@@ -33,6 +33,8 @@ IMAGE_INSTALL += " \
   hydraudp \
   packagegroup-fonts-truetype \
   liberation-fonts \
-  psplash \
   fw-update \
 "
+#  does not compile
+#  psplash \
+
