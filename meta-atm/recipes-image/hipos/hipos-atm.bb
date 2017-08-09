@@ -35,4 +35,6 @@ IMAGE_INSTALL += " \
   liberation-fonts \
   fw-update \
 "
+#  does not compile
+#  psplash \
 
