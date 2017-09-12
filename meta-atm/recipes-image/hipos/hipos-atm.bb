@@ -11,14 +11,13 @@ IMAGE_INSTALL_remove_himx0294 += "   \
    packagegroup-hipos-qt-examples \
    packagegroup-hipos-gstreamer \
 "
-
 IMAGE_INSTALL += " \
-	sqlite3 \
-	poppler \
-	atm \
-        qtbase-fonts \
-        qtbase-plugins \
-        icu \
+  sqlite3 \
+  poppler \
+  atm \
+  qtbase-fonts \
+  qtbase-plugins \
+  icu \
   gstreamer \
   gst-plugins-base-app \
   gst-plugins-base-meta \
