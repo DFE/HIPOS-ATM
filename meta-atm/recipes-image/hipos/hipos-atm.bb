@@ -6,14 +6,18 @@ IMAGE_LINGUAS = "en-us de-de it-it"
 
 IMAGE_FSTYPES = "tar.bz2"
 
+IMAGE_INSTALL_remove_himx0294 += "   \
+   packagegroup-hipos-qt     \
+   packagegroup-hipos-qt-examples \
+   packagegroup-hipos-gstreamer \
+"
+
 IMAGE_INSTALL += " \
 	sqlite3 \
 	poppler \
 	atm \
         qtbase-fonts \
         qtbase-plugins \
-        qtbase-tools \
-	qttools \
         icu \
   gstreamer \
   gst-plugins-base-app \
@@ -28,9 +32,11 @@ IMAGE_INSTALL += " \
   gst-plugins-good-rtp \
   gst-plugins-good-rtpmanager \
   gst-plugins-good-rtsp \
+  gstreamer1.0-plugins-base-meta \
+  gstreamer1.0-plugins-good-meta \
+  gstreamer1.0-plugins-bad-meta \
   v4l-utils \
   live555 \
-  qtimageformats-plugins \
   hydraudp \
   packagegroup-fonts-truetype \
   liberation-fonts \

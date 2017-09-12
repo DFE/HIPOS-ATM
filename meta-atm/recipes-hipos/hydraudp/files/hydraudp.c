@@ -133,15 +133,15 @@ static struct fb_fix_screeninfo fb_finfo;     /**< fix screen info (server only)
 static stream_t* s_streams[MAX_QUADRANT];     /**< active stream objects per quadrant if not 0 (server only) */
 static gboolean trace_fames[DRTP_MAX_CAMS];   /**< stream trace flag (server only) */
 
-#define FIX_VIDEO_AREA
+//#define FIX_VIDEO_AREA
 /** Support changes for other display resolution later. See code inf server_main to fix these constants... */
-#ifdef FIX_VIDEO_AREA
-#define HEIGHT 768                            /**< video area height */
-#define WIDTH  960                            /**< video area width */
-#else
+//#ifdef FIX_VIDEO_AREA
+//#define HEIGHT 800                            /**< video area height */
+//#define WIDTH  960                            /**< video area width */
+//#else
 static unsigned HEIGHT = 768;                 /**< video area height */
 static unsigned WIDTH = 960;                  /**< video area width */
-#endif /* FIX_VIDEO_AREA */
+//#endif /* FIX_VIDEO_AREA */
 
 
 // Forwards...
@@ -1075,8 +1075,10 @@ static gboolean server_cmd(gchar* cmd)
 
 #ifndef FIX_VIDEO_AREA
 		/* possible adaptations for other display resolutions possible here */
-		if (WIDTH > fb_vinfo.xres) { WIDTH = fb_vinfo.xres; }
-		if (HEIGHT > fb_vinfo.yres) { HEIGHT = fb_vinfo.yres; }
+                //if (WIDTH > fb_vinfo.xres) { WIDTH = fb_vinfo.xres; }
+                //if (HEIGHT > fb_vinfo.yres) { HEIGHT = fb_vinfo.yres; }
+                WIDTH = fb_vinfo.xres;
+                HEIGHT = fb_vinfo.yres;
 #endif
 		g_message("display resolution %ux%u video area [0, 0, %u, %u]", fb_vinfo.xres, fb_vinfo.yres, WIDTH, HEIGHT);
 	}
