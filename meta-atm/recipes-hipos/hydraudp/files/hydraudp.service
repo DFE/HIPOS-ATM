@@ -3,6 +3,8 @@ Description=HydraIP rtp/udp video server
 Before=atm.service
 
 [Service]
+ExecStartPre=/usr/sbin/fbset -fb /dev/fb1 -g 1280 800 1280 2400 32
+ExecStartPre=/bin/bash -c "/bin/echo 0 > /sys/class/graphics/fb1/blank"
 ExecStart=/usr/bin/hydraudp --server --version
 ExecStop=/usr/bin/hydraudp
 
