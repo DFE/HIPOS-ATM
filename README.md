@@ -21,6 +21,8 @@ Although OpenEmbedded builds sandboxes to be reproducible and build host indepen
 
 For required packages at your build host see [OE wiki](http://www.openembedded.org/wiki/Getting_started#Required_software).
 
+The HIPOS-ATM build system has been successfully tested with Fedora20. (https://archives.fedoraproject.org/pub/archive/fedora/linux/releases/20/Fedora/x86_64/iso/)
+
 ### Set up build environment from scratch
 
 You only need to do this once for every new from-scratch build. We've said that already, but we want to be on the safe side.
