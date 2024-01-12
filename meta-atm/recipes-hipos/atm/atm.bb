@@ -3,6 +3,9 @@ LIC_FILES_CHKSUM = "file://LICENSE;md5=d41d8cd98f00b204e9800998ecf8427e"
 SECTION = "multimedia"
 DEPENDS = "poppler"
 SRCREV = "667"
+
+BB_STRICT_CHECKSUM = "0"
+
 #SRC_URI = "svn://svn.gecoitalia.biz:18080/svn;protocol=http;module=atm" # This apparently no longer works!
 SRC_URI = "http://svn.gecoitalia.biz:18080/svn;protocol=http;module=atm"
 
